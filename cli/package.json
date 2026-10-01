@@ -1,6 +1,6 @@
 {
   "name": "binference",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "description": "Set up AI agents on Binance Agent OS that think with bInference, with trading limits and a cockpit on binference.io.",
   "keywords": [
     "binference",
