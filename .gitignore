@@ -1,0 +1,5 @@
+node_modules/
+# Copied in by `npm pack` (scripts/copy-skill.mjs); the source is skills/binference.
+cli/skills/
+.DS_Store
+*.log

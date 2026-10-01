@@ -1,0 +1,29 @@
+name: CLI
+
+on:
+  push:
+    branches: [main]
+    paths: ["cli/**", "skills/binference/scripts/**", ".github/workflows/cli.yml"]
+  pull_request:
+    paths: ["cli/**", "skills/binference/scripts/**", ".github/workflows/cli.yml"]
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node: [22, 24]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+      - run: npm run lint
+        working-directory: cli
+      - run: npm test
+        working-directory: cli

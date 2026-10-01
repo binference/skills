@@ -14,7 +14,8 @@
     "skills"
   ],
   "scripts": {
-    "test": "node --test test/*.test.mjs",
+    "test": "node --test --test-concurrency=4 test/*.test.mjs",
+    "lint": "npx -y @biomejs/biome@2 lint bin src hooks test ../skills/binference/scripts --diagnostic-level=error",
     "prepack": "node scripts/copy-skill.mjs"
   },
   "engines": {
