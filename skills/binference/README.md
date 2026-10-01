@@ -3,7 +3,9 @@
 A skill for agents that run on [bInference](https://binference.io): one key for hundreds of AI
 models, charged to the agent's own AI budget. It checks the budget before costly work, estimates
 what a task will cost, picks models by price and ability, reads and makes images, gives
-sub-agents capped keys, and explains errors. Instructions are in [SKILL.md](SKILL.md).
+sub-agents capped keys, and explains errors. In an agent folder made by `npx binference agent-os`
+for Binance Agent OS, it also reads the cockpit's status and keeps to the owner's trade limits.
+Instructions are in [SKILL.md](SKILL.md).
 
 ## Requirements
 
