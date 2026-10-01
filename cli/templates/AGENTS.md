@@ -19,6 +19,14 @@ brakes it from its cockpit on binference.io. These rules apply in every session.
   `.binference/`, `.claude/` or `.codex/`.
 - When the cockpit says this agent is paused, do not trade.
 
+## Calls to Binance
+
+- When waiting on Binance (a transfer to arrive, an order to fill), check at most once a minute,
+  and never in a loop without a pause. Prefer one call that returns everything you need over many
+  small ones.
+- On a rate-limit answer (HTTP 429 or 418, "too much request weight", "IP banned"), stop calling
+  Binance until the time it names, and tell the person. Calls during a ban make it longer.
+
 ## AI budget and models
 
 - Before long or repeated work, check the AI budget with the `binference` skill and say what the
