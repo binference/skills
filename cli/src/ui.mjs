@@ -1,59 +1,92 @@
-// Terminal output: one style for every command. Plain text when the output is not a
-// terminal or NO_COLOR is set.
+// Terminal output: one style for every command. Colors only on a terminal, never with
+// NO_COLOR or TERM=dumb (FORCE_COLOR forces them). With --json, nothing human is printed:
+// stdout carries only JSON, for agents and scripts.
 
 import { createInterface } from "node:readline/promises";
 import { styleText } from "node:util";
 
-const color = process.stdout.isTTY && !process.env.NO_COLOR;
-const paint = (style, text) => (color ? styleText(style, text) : text);
+let json = false;
+
+export function setJson(on) {
+  json = Boolean(on);
+}
+
+export const isJson = () => json;
+
+/** A person can answer prompts: stdin and stdout are a terminal, not CI, not --json. */
+export const interactive = () => !json && Boolean(process.stdin.isTTY && process.stdout.isTTY) && !process.env.CI;
+
+function colorOn(stream) {
+  if (process.env.NO_COLOR || process.env.TERM === "dumb") return false;
+  if (process.env.FORCE_COLOR && process.env.FORCE_COLOR !== "0") return true;
+  return Boolean(stream.isTTY);
+}
+
+const paint = (style, text, stream = process.stdout) =>
+  colorOn(stream) ? styleText(style, text, { validateStream: false }) : text;
 
 export const bold = (text) => paint("bold", text);
 export const dim = (text) => paint("dim", text);
 export const yellow = (text) => paint("yellow", text);
 
-const MARK = { ok: paint("green", "✓"), fail: paint("red", "✗"), todo: paint("yellow", "○"), info: dim("·") };
+const MARK = { ok: ["green", "✓"], fail: ["red", "✗"], todo: ["yellow", "○"], info: ["dim", "·"] };
+
+const out = (text) => {
+  if (!json) process.stdout.write(text);
+};
 
 export function title(text) {
-  process.stdout.write(`\n${bold(text)}\n`);
+  out(`\n${bold(text)}\n`);
 }
 
 export function line(text = "") {
-  process.stdout.write(`${text}\n`);
+  out(`${text}\n`);
 }
 
 /** One checklist line: ok, fail, todo (the person's own step) or info. */
 export function check(kind, text, detail) {
-  process.stdout.write(`  ${MARK[kind] ?? MARK.info} ${text}${detail ? dim(`  ${detail}`) : ""}\n`);
+  const [style, mark] = MARK[kind] ?? MARK.info;
+  out(`  ${paint(style, mark)} ${text}${detail ? dim(`  ${detail}`) : ""}\n`);
 }
 
 /** A command the person runs themselves, on its own line so it copies cleanly. */
 export function command(text) {
-  process.stdout.write(`\n    ${yellow(text)}\n\n`);
+  out(`\n    ${yellow(text)}\n\n`);
 }
 
-export function fail(message) {
-  process.stderr.write(`\n${paint("red", "✗")} ${message}\n\n`);
-  process.exit(1);
+/** One JSON value on its own line of stdout, only with --json. */
+export function emit(value) {
+  if (json) process.stdout.write(`${JSON.stringify(value)}\n`);
 }
 
-/** A yes/no question; the default when the input is not a terminal. */
-export async function confirm(question, fallback = true) {
-  if (!process.stdin.isTTY) return fallback;
+/** An error for a person: on stderr, with what to do next. */
+export function printError(message, hint) {
+  const mark = paint("red", "✗", process.stderr);
+  process.stderr.write(`\n${mark} ${message}\n${hint ? `  ${hint}\n` : ""}\n`);
+}
+
+/**
+ * A yes/no question. Null when no person can answer (no terminal, CI or --json): the caller
+ * then needs a flag such as --yes, and never assumes a yes.
+ */
+export async function confirm(question, { defaultYes = false } = {}) {
+  if (!interactive()) return null;
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
-    const answer = (await rl.question(`  ${question} ${dim(fallback ? "[Y/n]" : "[y/N]")} `)).trim().toLowerCase();
-    if (answer === "") return fallback;
+    const answer = (await rl.question(`  ${question} ${dim(defaultYes ? "[Y/n]" : "[y/N]")} `)).trim().toLowerCase();
+    if (answer === "") return defaultYes;
     return answer === "y" || answer === "yes";
   } finally {
     rl.close();
   }
 }
 
-/** One choice from a short list, by number; the first when the input is not a terminal. */
+/** One choice from a short list, by number. Null when no person can answer. */
 export async function choose(question, options) {
-  if (!process.stdin.isTTY || options.length === 1) return options[0].value;
+  if (options.length === 1) return options[0].value;
+  if (!interactive()) return null;
   line(`  ${question}`);
-  options.forEach((option, index) => line(`    ${index + 1}. ${option.label}`));
+  for (const [index, option] of options.entries()) line(`    ${index + 1}. ${option.label}`);
   const rl = createInterface({ input: process.stdin, output: process.stdout });
   try {
     for (;;) {

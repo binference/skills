@@ -1,9 +1,40 @@
-// What is installed: Node.js, Claude Code, Codex and Binance's `baw`, with versions.
+// What is installed (Node.js, Claude Code, Codex, Binance's `baw`) and running other programs.
 
 import { spawn } from "node:child_process";
 
-/** Runs a program and returns its output, or null when it is missing or fails. */
-export function run(program, args, { cwd, timeoutMs = 15_000, env } = {}) {
+const MAX_OUTPUT = 4 * 1024 * 1024;
+
+// Children run in their own process group (so a timeout can stop all of it); they are
+// stopped too when this process ends or is interrupted.
+const running = new Set();
+let cleanupInstalled = false;
+
+function stopGroup(pid) {
+  try {
+    process.kill(-pid, "SIGKILL");
+  } catch {
+    // Already gone.
+  }
+}
+
+function installCleanup() {
+  if (cleanupInstalled) return;
+  cleanupInstalled = true;
+  process.on("exit", () => running.forEach(stopGroup));
+  for (const signal of ["SIGINT", "SIGTERM", "SIGHUP"]) {
+    process.once(signal, () => {
+      running.forEach(stopGroup);
+      process.kill(process.pid, signal);
+    });
+  }
+}
+
+/**
+ * Runs a program and returns its stdout, or null when it is missing, fails or times out.
+ * `stderr: true` adds stderr to the text. On a timeout the program's whole process group is
+ * stopped, so tools that start their own children (npx, npm) leave nothing behind.
+ */
+export function run(program, args, { cwd, timeoutMs = 15_000, env, stderr = false } = {}) {
   return new Promise((done) => {
     let out = "";
     let child;
@@ -11,27 +42,31 @@ export function run(program, args, { cwd, timeoutMs = 15_000, env } = {}) {
       child = spawn(program, args, {
         cwd,
         env: env ? { ...process.env, ...env } : process.env,
-        stdio: ["ignore", "pipe", "pipe"],
-        shell: process.platform === "win32",
+        stdio: ["ignore", "pipe", stderr ? "pipe" : "ignore"],
+        detached: true,
       });
     } catch {
       done(null);
       return;
     }
+    installCleanup();
+    if (child.pid) running.add(child.pid);
+    const keep = (chunk) => {
+      if (out.length < MAX_OUTPUT) out += chunk;
+    };
+    child.stdout.on("data", keep);
+    child.stderr?.on("data", keep);
     const timer = setTimeout(() => {
-      child.kill("SIGKILL");
+      stopGroup(child.pid);
       done(null);
     }, timeoutMs);
-    child.stdout.on("data", (chunk) => (out += chunk));
-    child.stderr.on("data", (chunk) => (out += chunk));
-    child.on("error", () => {
+    const finish = (result) => {
       clearTimeout(timer);
-      done(null);
-    });
-    child.on("close", (code) => {
-      clearTimeout(timer);
-      done(code === 0 ? out : null);
-    });
+      running.delete(child.pid);
+      done(result);
+    };
+    child.on("error", () => finish(null));
+    child.on("close", (code) => finish(code === 0 ? out : null));
   });
 }
 
@@ -51,25 +86,28 @@ export function atLeast(a, b) {
 
 /** Codex runs hooks from 0.140; Claude Code has had them far longer. */
 export const MIN_CODEX = "0.140.0";
-export const MIN_NODE = "22.0.0";
+/** The hooks run on whatever `node` is on PATH when the app starts them. */
+export const MIN_HOOK_NODE = "18.0.0";
 
 export async function installed() {
-  const [claude, codex, baw] = await Promise.all([
+  const [claude, codex, baw, node] = await Promise.all([
     run("claude", ["--version"]),
     run("codex", ["--version"]),
     run("baw", ["--version"]),
+    run("node", ["--version"]),
   ]);
   return {
     node: process.versions.node,
+    pathNode: versionIn(node),
     claude: versionIn(claude),
     codex: versionIn(codex),
     baw: versionIn(baw),
   };
 }
 
-/** Opens a link in the browser, quietly; false when it could not. */
+/** Opens an http(s) link in the browser, quietly; false when it could not. */
 export async function openLink(url) {
-  const opener =
-    process.platform === "darwin" ? ["open", [url]] : process.platform === "win32" ? ["cmd", ["/c", "start", "", url]] : ["xdg-open", [url]];
-  return (await run(opener[0], opener[1], { timeoutMs: 5_000 })) !== null;
+  if (!/^https?:\/\//.test(url)) return false;
+  const opener = process.platform === "darwin" ? "open" : "xdg-open";
+  return (await run(opener, [url], { timeoutMs: 5_000 })) !== null;
 }
