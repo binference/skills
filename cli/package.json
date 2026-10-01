@@ -1,7 +1,29 @@
 {
   "name": "binference",
   "version": "0.1.0",
-  "description": "Set up AI agents on Binance Agent OS that think with bInference, with a cockpit on binference.io that shows, limits and stops them.",
+  "description": "Set up AI agents on Binance Agent OS that think with bInference, with trading limits and a cockpit on binference.io.",
+  "keywords": [
+    "binference",
+    "binance",
+    "agent-os",
+    "ai-agent",
+    "claude-code",
+    "codex",
+    "bnb-chain",
+    "trading-agent",
+    "cli"
+  ],
+  "homepage": "https://docs.binference.io/agent-os",
+  "bugs": {
+    "url": "https://github.com/binference/skills/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/binference/skills.git",
+    "directory": "cli"
+  },
+  "license": "MIT",
+  "author": "bInference (https://binference.io)",
   "type": "module",
   "bin": {
     "binference": "bin/binference.mjs"
@@ -21,19 +43,7 @@
   "engines": {
     "node": ">=22"
   },
-  "keywords": [
-    "binance",
-    "agent-os",
-    "ai-agent",
-    "claude-code",
-    "codex",
-    "bnb-chain"
-  ],
-  "homepage": "https://docs.binference.io/agent-os",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/binference/skills.git",
-    "directory": "cli"
-  },
-  "license": "MIT"
+  "publishConfig": {
+    "access": "public"
+  }
 }
