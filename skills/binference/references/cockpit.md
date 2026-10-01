@@ -18,7 +18,7 @@ bInference cockpit for "my-agent" (https://binference.io/account/cockpit?id=12):
 | Line says                                       | Do                                                                           |
 | ----------------------------------------------- | ---------------------------------------------------------------------------- |
 | `PAUSED by its owner`                           | No trades, no long work. The owner resumes it in the cockpit                 |
-| `does not think through bInference`             | Tell the user to start the agent with `npx binference start` in its folder   |
+| `does not think through bInference`             | Tell the user to start the agent with `./start` in its folder               |
 | `key no longer works`                           | The key was revoked or the agent stopped. The user runs `npx binference doctor` |
 | `could not be reached`                          | The rules are unknown: trade only with the user's explicit yes               |
 | sign-in `ends in about N h`                     | Tell the user now. They sign the wallet in again                             |
