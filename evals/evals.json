@@ -1,0 +1,50 @@
+[
+  {
+    "name": "budget-before-a-loop",
+    "skills": ["binference"],
+    "query": "I want a watcher that summarizes BTC news every 5 minutes for 24 hours, about 3,000 input and 300 output tokens per call. Can my AI budget cover it on a cheap model and on a strong one? Don't start it, just tell me.",
+    "files": [],
+    "expected_behavior": [
+      "Reads the budget from GET /balance, binference:get_balance or scripts/budget.mjs, using the key's remaining_usd when it is lower than spendable_usd",
+      "Prices both models from the live GET /models list, not from memory, at 288 calls",
+      "States the cost per call and per day for each model and a verdict against the budget",
+      "Does not start the watcher, and does not print the key"
+    ]
+  },
+  {
+    "name": "vision-model-on-a-chart",
+    "skills": ["binference"],
+    "query": "Send chart.png to the cheapest bInference model that can read images and show me its two-sentence description of the trend.",
+    "files": ["chart.png"],
+    "expected_behavior": [
+      "Finds the cheapest model whose input_modalities include image, from the live list",
+      "Sends the image inline when small, or through scripts/upload.mjs and its link when over 4 MB",
+      "Sets max_tokens on the call and does not print the key",
+      "Shows that model's answer without adding numbers it cannot read"
+    ]
+  },
+  {
+    "name": "verified-recap-card",
+    "skills": ["binference"],
+    "query": "Make a recap card image for my trade: BNB/USDT, bought at 600.00, sold at 642.00, PnL +7.00%, Oct 1 to Oct 3.",
+    "files": [],
+    "expected_behavior": [
+      "Chooses an image model from GET /images/models and asks for response_format url",
+      "Puts only the given numbers on the card",
+      "Reads the card back with a model that reads images and compares every number",
+      "Regenerates when a number differs, and shows the card without posting it anywhere",
+      "Gives no advice or forecast"
+    ]
+  },
+  {
+    "name": "two-kinds-of-balance",
+    "skills": ["binference"],
+    "query": "My agent's model calls fail with 402 insufficient_balance, but my Binance account has funds. What's wrong?",
+    "files": [],
+    "expected_behavior": [
+      "Explains that the bInference AI budget and the Binance account are separate balances",
+      "Checks the AI budget and what running calls reserve",
+      "Suggests lowering max_tokens, a cheaper model, waiting for running calls, or adding credit"
+    ]
+  }
+]
