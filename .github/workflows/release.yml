@@ -24,5 +24,13 @@ jobs:
         working-directory: cli
       - run: npm test
         working-directory: cli
+      - name: Skip a version already on npm
+        id: published
+        working-directory: cli
+        run: |
+          if npm view "binference@$(node -p "require('./package.json').version")" version >/dev/null 2>&1; then
+            echo "done=true" >> "$GITHUB_OUTPUT"
+          fi
       - run: npm publish --provenance
+        if: steps.published.outputs.done != 'true'
         working-directory: cli
