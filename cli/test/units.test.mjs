@@ -16,7 +16,9 @@ describe("parseJsonOutput", () => {
     assert.deepEqual(parseJsonOutput('progress...\n{"success":true}'), { success: true });
     for (const text of ['{"success":true,"data":{', '{"a":1}\nretry in {5}s', "{", "}{", '{"a":'.repeat(20_000)]) {
       // In a child process with a time limit: a hang fails the test instead of stalling it.
-      const out = execFileSync(process.execPath, ["--input-type=module", "-e", `import { parseJsonOutput } from "./hooks/lib.mjs"; parseJsonOutput(${JSON.stringify(text)}); console.log("done")`], { cwd: CLI, timeout: 5_000, encoding: "utf8" });
+      // The text goes on stdin: Linux caps one command-line argument at 128 KB.
+      const script = 'import { parseJsonOutput } from "./hooks/lib.mjs"; let text = ""; for await (const chunk of process.stdin) text += chunk; parseJsonOutput(text); console.log("done")';
+      const out = execFileSync(process.execPath, ["--input-type=module", "-e", script], { cwd: CLI, input: text, timeout: 5_000, encoding: "utf8" });
       assert.equal(out.trim(), "done");
     }
   });
