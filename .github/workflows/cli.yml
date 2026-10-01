@@ -2,7 +2,7 @@ name: CLI
 
 on:
   push:
-    branches: [main]
+    branches: [master]
     paths: ["cli/**", "skills/binference/scripts/**", ".github/workflows/cli.yml"]
   pull_request:
     paths: ["cli/**", "skills/binference/scripts/**", ".github/workflows/cli.yml"]
