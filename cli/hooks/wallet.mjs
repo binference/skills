@@ -49,9 +49,9 @@ export function evmAddress(data) {
 
 /** The wallet as the cockpit takes it, read in about a second, or less when signed out. */
 export async function readWallet() {
-  const version = await bawVersion();
+  const version = await bawVersion(3_000);
   if (!version) return { status: "not_installed", address: null, baw_version: null, settings: null };
-  const status = await baw(["wallet", "status"]);
+  const status = await baw(["wallet", "status"], 4_000);
   if (status?.status !== "CONNECTED") {
     return {
       status: status ? "signed_out" : "unknown",
@@ -61,8 +61,8 @@ export async function readWallet() {
     };
   }
   const [settings, address] = await Promise.all([
-    baw(["wallet", "settings"]),
-    baw(["wallet", "address"]),
+    baw(["wallet", "settings"], 4_000),
+    baw(["wallet", "address"], 4_000),
   ]);
   return {
     status: "connected",
@@ -77,7 +77,7 @@ export async function readWallet() {
  * quote, or `baw market-order quote` into the chain's USDT (about a second). Null when it
  * cannot be told.
  */
-export async function valueOf(write) {
+export async function dollarValue(write) {
   if (write.action === "exchange_order") return write.quote ?? null;
   if (!write.from_token || !write.from_qty) return null;
   const chain = write.chain ?? "56";

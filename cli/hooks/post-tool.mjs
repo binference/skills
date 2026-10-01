@@ -1,17 +1,18 @@
 #!/usr/bin/env node
 // PostToolUse: records what a `baw` write or a Binance MCP write did, from its own JSON
-// output: the order, the transaction, how it ended. A swap answers only an order id, so a
-// detached follower watches it to its end and the agent never waits.
+// output: the order, the transaction, how it ended. Reports are queued and sent in the
+// background. A swap answers only an order id, so a detached follower watches it to its end
+// and the agent never waits.
 
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 
 import { hookWrites } from "./commands.mjs";
-import { actionRef, answer, FOLDER, input, parseJsonOutput, readState, report } from "./lib.mjs";
+import { actionRef, answer, FOLDER, flushInBackground, input, parseJsonOutput, queueReports, readState } from "./lib.mjs";
 
 const hook = await input();
 const writes = hookWrites(hook);
-if (writes.length === 0) answer();
+if (writes.length === 0) await answer();
 
 const output = parseJsonOutput(responseText(hook.tool_response));
 const values = readState().values?.[actionRef(hook)] ?? [];
@@ -47,7 +48,8 @@ const events = writes.map((write, index) => {
   });
 });
 
-await report(events, hook.session_id);
+await queueReports(events, hook.session_id ?? null);
+flushInBackground();
 
 // A submitted swap is followed to FINISHED or FAILED in the background.
 for (const [index, event] of events.entries()) {
@@ -55,12 +57,13 @@ for (const [index, event] of events.entries()) {
     const child = spawn(
       process.execPath,
       [join(FOLDER, ".binference", "hooks", "follow-order.mjs"), event.ref, event.order_id, hook.session_id ?? ""],
-      { detached: true, stdio: "ignore" },
+      { detached: true, stdio: "ignore", cwd: FOLDER },
     );
+    child.on("error", () => {});
     child.unref();
   }
 }
-answer();
+await answer();
 
 function responseText(response) {
   if (typeof response === "string") return response;

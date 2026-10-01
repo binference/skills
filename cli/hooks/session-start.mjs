@@ -1,23 +1,46 @@
 #!/usr/bin/env node
 // SessionStart: reports the session with the wallet as it is now, and gives the model a
 // short status block: the budget, the rules, the wallet's sign-out time and what to fix.
+// It records that it ran (for `npx binference doctor`) and always answers within its
+// budget, with the last known state when the site or the wallet is slow.
 
 import { spawn } from "node:child_process";
 import { join } from "node:path";
 
-import { answer, api, appOf, config, FOLDER, flushOutbox, input, log, readState, saveCockpit } from "./lib.mjs";
+import {
+  answer,
+  api,
+  appOf,
+  config,
+  deadline,
+  FOLDER,
+  flushInBackground,
+  input,
+  log,
+  readState,
+  saveCockpit,
+  updateState,
+} from "./lib.mjs";
 import { dollars } from "./rules.mjs";
 import { readWallet } from "./wallet.mjs";
 
+/** Well under the 20 s the folder's settings give this hook. */
+const BUDGET_MS = 12_000;
+
 const hook = await input();
 const cfg = config();
-if (!cfg) answer();
+if (!cfg) await answer();
 
 const sessionId =
   typeof hook.session_id === "string" && /^[\w.:-]{1,128}$/.test(hook.session_id)
     ? hook.session_id
     : `s-${Date.now()}`;
 const app = appOf(hook);
+await updateState((local) => ({
+  ...local,
+  last_session: { at: new Date().toISOString(), app, source: typeof hook.source === "string" ? hook.source : null },
+})).catch(() => {});
+deadline(BUDGET_MS, () => contextOutput(readState().cockpit, null, 0));
 const wallet = cfg.report === false ? null : await readWallet();
 
 const started = await api("POST", "/api/v1/cockpit/sessions", {
@@ -26,9 +49,9 @@ const started = await api("POST", "/api/v1/cockpit/sessions", {
   app_version: null,
   wallet,
 });
-if (started.ok) saveCockpit(started.json);
+if (started.ok) await saveCockpit(started.json);
 else log("session_unreported", { status: started.status });
-await flushOutbox(sessionId);
+flushInBackground();
 
 // A linked wallet's history is synced in the background, from where the last sync stopped.
 const linked = started.ok ? started.json.wallet : null;
@@ -36,18 +59,23 @@ if (linked && wallet?.status === "connected" && wallet.address === linked.addres
   const child = spawn(
     process.execPath,
     [join(FOLDER, ".binference", "hooks", "sync-history.mjs"), linked.synced_through ?? linked.linked_at],
-    { detached: true, stdio: "ignore" },
+    { detached: true, stdio: "ignore", cwd: FOLDER },
   );
+  child.on("error", () => {});
   child.unref();
 }
 
 const state = started.ok ? started.json : readState().cockpit;
-answer({
-  hookSpecificOutput: {
-    hookEventName: "SessionStart",
-    additionalContext: statusBlock(state, wallet, started.status),
-  },
-});
+await answer(contextOutput(state, wallet, started.status));
+
+function contextOutput(cockpit, walletNow, status) {
+  return {
+    hookSpecificOutput: {
+      hookEventName: "SessionStart",
+      additionalContext: statusBlock(cockpit, walletNow, status),
+    },
+  };
+}
 
 function hoursUntil(isoTime) {
   const ms = new Date(isoTime).getTime() - Date.now();

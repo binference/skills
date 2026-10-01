@@ -20,6 +20,11 @@ export const VALUE_ACTIONS = new Set([
   "exchange_order",
 ]);
 
+/** Whether the dollar rules apply to a write: a value action, or one marked as moving value. */
+export function movesValue(write) {
+  return VALUE_ACTIONS.has(write.action) || write.moves_value === true;
+}
+
 export function dollars(value) {
   return `$${Number(value).toLocaleString("en-US", {
     minimumFractionDigits: 2,
@@ -39,7 +44,7 @@ function amount(value) {
  * Whether `write` may run.
  *
  * state      the cockpit as GET /api/v1/cockpit answers it (rules, paused, traded today)
- * write      { action, from_token, to_token }
+ * write      { action, from_token, to_token, moves_value?, unparsed? }
  * usd        the action's dollar value, or null when it could not be told
  * extraToday dollars traded today that the server has not counted yet
  * app        "claude_code" or "codex"
@@ -55,6 +60,20 @@ export function decide({ state, write, usd, extraToday = 0, app, confirmed = fal
     };
   }
   const rules = state?.rules ?? {};
+  const ask = (rule, reason) =>
+    confirmed
+      ? { decision: "allow", rule: null, reason: null }
+      : { decision: app === "codex" ? "confirm" : "ask", rule, reason };
+
+  // A call the hooks could not read can do anything: with any limit set, the person decides.
+  const anyRule =
+    rules.max_trade_usd || rules.day_trade_usd || rules.confirm_above_usd || Array.isArray(rules.allowed_tokens);
+  if (write.unparsed && anyRule) {
+    return ask(
+      "confirm",
+      `bInference could not read what this command does (${write.command}), so your limits on binference.io cannot be checked. The person has to confirm it. ${NEVER_AROUND}`,
+    );
+  }
 
   const allowed = Array.isArray(rules.allowed_tokens)
     ? new Set(rules.allowed_tokens.map(tokenKey))
@@ -71,18 +90,13 @@ export function decide({ state, write, usd, extraToday = 0, app, confirmed = fal
     }
   }
 
-  if (!VALUE_ACTIONS.has(write.action)) return { decision: "allow", rule: null, reason: null };
+  if (!movesValue(write)) return { decision: "allow", rule: null, reason: null };
 
   const maxTrade = amount(rules.max_trade_usd);
   const dayTrade = amount(rules.day_trade_usd);
   const confirmAbove = amount(rules.confirm_above_usd);
   const ruled = maxTrade !== null || dayTrade !== null || confirmAbove !== null;
   if (!ruled) return { decision: "allow", rule: null, reason: null };
-
-  const ask = (rule, reason) =>
-    confirmed
-      ? { decision: "allow", rule: null, reason: null }
-      : { decision: app === "codex" ? "confirm" : "ask", rule, reason };
 
   if (usd === null) {
     return ask(

@@ -1,27 +1,30 @@
 #!/usr/bin/env node
 // Runs detached after a swap: polls `baw market-order list --orderId` until the order is
-// FINISHED or FAILED (two minutes at most) and reports the end, with its transaction.
+// FINISHED or FAILED, waiting longer between tries (about three minutes in all), and
+// reports the end with its transaction.
 //
 //   node follow-order.mjs <ref> <orderId> <sessionId>
 
-import { baw, report } from "./lib.mjs";
+import { baw, flushOutbox, queueReports } from "./lib.mjs";
 
 const [ref, orderId, sessionId] = process.argv.slice(2);
 if (!ref || !orderId) process.exit(0);
 
-const STEP_MS = 3_000;
-const TRIES = 40;
+// Never outlives its job, whatever a call does.
+setTimeout(() => process.exit(0), 4 * 60_000).unref();
 
-for (let attempt = 0; attempt < TRIES; attempt += 1) {
-  await new Promise((resume) => setTimeout(resume, STEP_MS));
+const WAITS_MS = [2_000, 3_000, 5_000, 8_000, 13_000, 20_000, 30_000, 30_000, 30_000, 30_000];
+const symbol = (value) =>
+  typeof value === "string" && value.length > 0 && value.length <= 32 && !/\p{Cc}/u.test(value)
+    ? value
+    : undefined;
+
+for (const wait of WAITS_MS) {
+  await new Promise((resume) => setTimeout(resume, wait));
   const data = await baw(["market-order", "list", "--orderId", orderId]);
   const order = Array.isArray(data?.list) ? data.list[0] : null;
   if (!order || (order.status !== "FINISHED" && order.status !== "FAILED")) continue;
-  const symbol = (value) =>
-    typeof value === "string" && value.length > 0 && value.length <= 32 && !/[\u0000-\u001f]/.test(value)
-      ? value
-      : undefined;
-  await report(
+  await queueReports(
     [
       {
         ref,
@@ -36,6 +39,7 @@ for (let attempt = 0; attempt < TRIES; attempt += 1) {
     ],
     sessionId || null,
   );
-  process.exit(0);
+  await flushOutbox().catch(() => {});
+  break;
 }
 process.exit(0);
