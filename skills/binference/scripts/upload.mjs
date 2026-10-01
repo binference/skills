@@ -8,7 +8,7 @@
 
 import { done, fail, flags, readImage, uploadImage } from "./lib.mjs";
 
-const path = flags(process.argv.slice(2))._?.[0];
+const path = flags({}, "node scripts/upload.mjs <file>")._?.[0];
 if (!path) fail("Name the image to upload: node scripts/upload.mjs <file>");
 
 const image = await readImage(path);

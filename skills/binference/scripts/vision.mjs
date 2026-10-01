@@ -22,7 +22,15 @@ const MAX_INLINE_BYTES = 2.5 * 1024 * 1024;
 // vision model 1,000 output tokens cost a fraction of a cent.
 const DEFAULT_MAX_TOKENS = 1000;
 
-const args = flags(process.argv.slice(2));
+const args = flags(
+  {
+    model: { type: "string" },
+    image: { type: "string" },
+    prompt: { type: "string" },
+    "max-tokens": { type: "string" },
+  },
+  'node scripts/vision.mjs --model ID --image FILE_OR_URL --prompt "..." [--max-tokens N]',
+);
 if (!args.model)
   fail(
     "Name a model that reads images: --model <id>. List them with scripts/models.mjs --reads image.",

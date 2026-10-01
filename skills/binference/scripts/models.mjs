@@ -20,7 +20,16 @@ import { api, done, fail, flags } from "./lib.mjs";
 
 const INPUT_PER_OUTPUT = 4;
 
-const args = flags(process.argv.slice(2));
+const args = flags(
+  {
+    reads: { type: "string" },
+    writes: { type: "string" },
+    search: { type: "string" },
+    images: { type: "boolean" },
+    top: { type: "string" },
+  },
+  "node scripts/models.mjs [--reads text|image|file|audio] [--writes text|image] [--search TEXT] [--images] [--top N]",
+);
 const top = args.top === undefined ? 15 : Number(args.top);
 if (!Number.isInteger(top) || top < 1) fail("--top must be a whole number of 1 or more.");
 

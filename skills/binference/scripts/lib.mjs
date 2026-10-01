@@ -2,7 +2,9 @@
 // API and to fail. Node.js 18 or newer, no packages. The key is read from BINF_API_KEY and is
 // never printed, logged or written anywhere.
 
+import { writeSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { parseArgs } from "node:util";
 
 export const API_URL = (process.env.BINF_API_URL ?? "https://binference.io/api/v1").replace(
   /\/+$/,
@@ -24,16 +26,30 @@ export function key() {
   return value ? value : null;
 }
 
+/**
+ * Prints JSON on stdout and exits. Compact when read by a program (an agent's shell, a
+ * pipe), indented on a terminal. Written synchronously, so exiting never cuts it off.
+ */
+function print(value, code) {
+  const text = Buffer.from(`${JSON.stringify(value, null, process.stdout.isTTY ? 2 : undefined)}\n`);
+  for (let offset = 0; offset < text.length; ) {
+    try {
+      offset += writeSync(1, text, offset);
+    } catch (error) {
+      if (error.code !== "EAGAIN") throw error;
+    }
+  }
+  process.exit(code);
+}
+
 /** Prints the result as JSON on stdout and exits 0. */
 export function done(result) {
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-  process.exit(0);
+  print(result, 0);
 }
 
 /** Prints `{ ok: false, error }` as JSON on stdout and exits 1. */
 export function fail(message, extra = {}) {
-  process.stdout.write(`${JSON.stringify({ ok: false, error: { message, ...extra } }, null, 2)}\n`);
-  process.exit(1);
+  print({ ok: false, error: { message, ...extra } }, 1);
 }
 
 /**
@@ -86,21 +102,47 @@ export async function api(
   return json;
 }
 
-/** Command-line flags: `--name value`, repeatable ones collected into arrays. */
-export function flags(argv, repeatable = []) {
-  const out = {};
-  for (let i = 0; i < argv.length; i += 1) {
-    const arg = argv[i];
-    if (!arg.startsWith("--")) {
-      (out._ ??= []).push(arg);
-      continue;
+/** The closest flag within two edits, for "did you mean". */
+function closest(word, names) {
+  const distance = (a, b) => {
+    const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i += 1) {
+      let previous = row[0];
+      row[0] = i;
+      for (let j = 1; j <= b.length; j += 1) {
+        const current = row[j];
+        row[j] = Math.min(row[j] + 1, row[j - 1] + 1, previous + (a[i - 1] === b[j - 1] ? 0 : 1));
+        previous = current;
+      }
     }
-    const name = arg.slice(2);
-    const value = argv[i + 1] !== undefined && !argv[i + 1].startsWith("--") ? argv[++i] : "true";
-    if (repeatable.includes(name)) (out[name] ??= []).push(value);
-    else out[name] = value;
+    return row[b.length];
+  };
+  const best = names.map((name) => [name, distance(word, name)]).sort((x, y) => x[1] - y[1])[0];
+  return best && best[1] <= 2 ? best[0] : null;
+}
+
+/**
+ * The command line, read strictly: `spec` names each flag as util.parseArgs does. An
+ * unknown or malformed flag fails with what to type instead; --help prints `usage`.
+ * Bare arguments come back in `_`.
+ */
+export function flags(spec, usage) {
+  let parsed;
+  try {
+    parsed = parseArgs({ args: process.argv.slice(2), options: { ...spec, help: { type: "boolean" } }, allowPositionals: true, strict: true });
+  } catch (error) {
+    const unknown = /'(-{1,2}[^']+)'/.exec(error.message)?.[1];
+    const guess = unknown ? closest(unknown.replace(/^-+/, ""), Object.keys(spec)) : null;
+    fail(
+      error.code === "ERR_PARSE_ARGS_UNKNOWN_OPTION" && unknown
+        ? `Unknown flag ${unknown}.${guess ? ` Did you mean --${guess}?` : ""}`
+        : `${error.message.split(". ")[0]}.`,
+      { code: "bad_flag", usage },
+    );
   }
-  return out;
+  if (parsed.values.help) done({ ok: true, usage });
+  const { help, ...values } = parsed.values;
+  return parsed.positionals.length > 0 ? { ...values, _: parsed.positionals } : values;
 }
 
 const MAX_UPLOAD_BYTES = 20 * 1024 * 1024;

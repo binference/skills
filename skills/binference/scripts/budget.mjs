@@ -23,7 +23,15 @@ import { api, done, fail, flags, key, usd } from "./lib.mjs";
 // usually run past the estimate, and other calls share the same budget.
 const GO_SHARE = 0.5;
 
-const args = flags(process.argv.slice(2), ["model"]);
+const args = flags(
+  {
+    calls: { type: "string" },
+    input: { type: "string" },
+    output: { type: "string" },
+    model: { type: "string", multiple: true },
+  },
+  "node scripts/budget.mjs [--calls N --input TOKENS --output TOKENS --model ID [--model ID ...]]",
+);
 
 if (Object.keys(args).length === 0) {
   if (!key()) fail("Set BINF_API_KEY to read the budget.");

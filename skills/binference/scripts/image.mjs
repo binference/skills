@@ -19,7 +19,18 @@ import { join } from "node:path";
 
 import { api, done, fail, flags, MODEL_TIMEOUT_MS, usd } from "./lib.mjs";
 
-const args = flags(process.argv.slice(2));
+const args = flags(
+  {
+    model: { type: "string" },
+    prompt: { type: "string" },
+    n: { type: "string" },
+    resolution: { type: "string" },
+    quality: { type: "string" },
+    "aspect-ratio": { type: "string" },
+    out: { type: "string" },
+  },
+  'node scripts/image.mjs --model ID --prompt "..." [--n N] [--resolution R] [--quality Q] [--aspect-ratio W:H] [--out DIR]',
+);
 if (!args.model) fail("Name an image model: --model <id>, from GET /images/models.");
 if (!args.prompt) fail('Say what to draw: --prompt "...".');
 
